@@ -69,6 +69,7 @@ class LasWriter:
 
         self.dest = dest
         self.done = False
+        self._evlrs_written = False
 
         dims.raise_if_version_not_compatible_with_fmt(
             header.point_format.id, str(self.header.version)
@@ -177,6 +178,7 @@ class LasWriter:
                 "EVLRs are not supported on files with version less than 1.4"
             )
 
+        self._evlrs_written = True
         if len(evlrs) > 0:
             self.point_writer.done()
             self.done = True
@@ -191,6 +193,14 @@ class LasWriter:
         to write points afterwards.
         """
         if self.point_writer is not None:
+            if not self._evlrs_written and self.header.evlrs:
+                # EVLRs stored on the header (typically copied from a
+                # reader, e.g. the WKT CRS of a LAS 1.4 file) are part of
+                # the file: write them now instead of silently dropping
+                # them. This is what LasData.write does explicitly.
+                # write_evlrs() also finalizes the point writer.
+                self.write_evlrs(self.header.evlrs)
+
             if not self.done:
                 self.point_writer.done()
 
