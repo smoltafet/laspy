@@ -122,12 +122,12 @@ class ClassificationLookupVlr(BaseKnownVLR):
 
     def parse_record_data(self, record_data: bytes) -> None:
         for class_id, desc in struct.iter_unpack("<B15s", record_data):
-            # index using desc[i:i+1], because desc[i] gives an int, and we want a byte
-            description = b"".join(
-                desc[i : i + 1]
-                for i in range(len(desc))
-                if desc[i : i + 1].isalnum() or desc[i : i + 1] == b" "
-            ).decode()
+            # The description is a fixed-size, NUL-padded string: keep
+            # everything up to the first NUL byte. Filtering the bytes
+            # here (e.g. to alphanumerics) silently drops characters
+            # such as underscores, hyphens and dots found in real files,
+            # making a read/write round trip lossy.
+            description = desc.split(NULL_BYTE, 1)[0].decode()
             self.lookups[class_id] = description
 
     def record_data_bytes(self) -> bytes:

@@ -34,6 +34,48 @@ def test_lookup_out_of_range():
         classification_lookup[-42] = "SolidWater"
 
 
+def test_classification_lookup_descriptions_are_not_mangled():
+    # Descriptions in the wild contain characters other than
+    # alphanumerics and spaces (underscores, hyphens, dots, commas);
+    # parsing must keep them, only the NUL padding is stripped.
+    record_data = b"".join(
+        laspy.vlrs.known.ClassificationLookupVlr._lookup_struct.pack(
+            class_id, description
+        )
+        for class_id, description in [
+            (2, b"LEX_PotenialGND"),  # exactly 15 bytes, no padding
+            (9, b"created, never"),
+            (17, b"low-vegetation."),
+            (42, b"wire - guard"),
+        ]
+    )
+    classification_lookup = laspy.vlrs.known.ClassificationLookupVlr()
+    classification_lookup.parse_record_data(record_data)
+
+    assert classification_lookup[2] == "LEX_PotenialGND"
+    assert classification_lookup[9] == "created, never"
+    assert classification_lookup[17] == "low-vegetation."
+    assert classification_lookup[42] == "wire - guard"
+
+    # and writing the parsed VLR back gives the same bytes
+    assert classification_lookup.record_data_bytes() == record_data
+
+
+def test_classification_lookup_round_trip():
+    classification_lookup = laspy.vlrs.known.ClassificationLookupVlr()
+    classification_lookup[0] = "unclassified"
+    classification_lookup[2] = "ground"
+    classification_lookup[7] = "noise (low)"
+
+    parsed_again = laspy.vlrs.known.ClassificationLookupVlr()
+    parsed_again.parse_record_data(classification_lookup.record_data_bytes())
+
+    assert parsed_again.lookups == classification_lookup.lookups
+    assert parsed_again.record_data_bytes() == (
+        classification_lookup.record_data_bytes()
+    )
+
+
 def test_adding_extra_bytes_vlr_by_hand():
     """
     Test that if someone adds an ExtraBytesVlr by himself
